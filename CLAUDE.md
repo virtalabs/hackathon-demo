@@ -74,14 +74,14 @@ Required tools:
 
 ## Service Inventory and Image Pins
 
-TapirXL and BlueFlow are pulled as published images from `virtalabsinc/*` on Docker Hub. **Pin exact tags in `compose.yaml`; never use `latest`.** Tag scheme is `demo-<semver>` (e.g. `demo-0.3.0`). Viper, `viper-psql`, and `inngest` are currently built from local source (viper repo); `replay` is built from this repo.
+TapirXL and BlueFlow are pulled as published images from `virtalabsinc/*` on Docker Hub. **Pin exact tags in `compose.yaml`; never use `latest`.** Tag scheme is `demo-<semver>` (e.g. `demo-0.3.1`). Viper, `viper-psql`, and `inngest` are currently built from local source (viper repo); `replay` is built from this repo.
 
 | Service           | Image / Source                                   | Role | Pinned where |
 | ----------------- | ------------------------------------------------ | ---- | ------------ |
 | `blueflow-psql`   | `postgres:16-alpine`                             | BlueFlow Postgres | upstream tag |
 | `blueflow-redis`  | `redis:7-alpine`                                 | BlueFlow Celery broker + result backend | upstream tag |
 | `blueflow`        | `virtalabsinc/blueflow:demo-<semver>`            | Django REST API; mounts `/api/assets/upsert/`. Auto-creates `admin/admin`. | `.env`: `BLUEFLOW_TAG` |
-| `blueflow-worker` | `virtalabsinc/blueflow:demo-<semver>`            | Celery worker; pushes asset upserts to Viper's callback URL | same as `blueflow` |
+| `blueflow-worker` | `virtalabsinc/blueflow:demo-<semver>`            | Celery worker (not started by `just boot`/`just demo`; `CELERY_TASK_ALWAYS_EAGER=True` in dev runs the task inside `blueflow`) | same as `blueflow` |
 | `viper-psql`      | built from source (viper repo `docker/db/`)      | Viper Postgres | local build |
 | `viper`           | built from source (viper repo `docker/viper/`)   | Viper UI (Better-Auth, Next.js) | local build |
 | `inngest`         | built from source (viper repo `docker/inngest/`) | Inngest dev server; drives Viper sync cron and triggered syncs | local build |
@@ -191,7 +191,7 @@ volume set.
 | **N4** | `cap_add: [NET_ADMIN]` lives on `tapirxl` only. Do not add it to `replay`; the shared netns inherits it. |
 | **N5** | `replay` is gated by `profiles: ["live"]` so `docker compose up` (default) brings up the Phase 1 stack only. Do not change this without updating `just capture`. |
 | **N6** | The PCAP under `pcap/synthetic_philips_demo.pcap` is the canonical fixture. Replacing it requires regenerating `golden_synthetic_philips_assets.jsonl` in TapirXL — coordinate the bump there first. |
-| **N7** | The compose file does **not** mutate TapirXL behaviour by remounting Vector configs. The `tapirxl:demo-<tag>` image bakes both `upload-vector.toml` and `upload-vector.pcap.toml`; rely on `TAPIRXL_MODE` to select the right one. |
+| **N7** | The compose file does **not** mutate TapirXL behaviour by remounting Vector configs. The `tapirxl:demo-<tag>` image bakes `upload-vector.toml` (long-running) and `upload-vector.stdin.toml` (one-shot, was `upload-vector.pcap.toml` in `demo-0.3.0`); rely on `TAPIRXL_MODE` to select the right one. |
 | **N8** | `tapirxl` mounts the PCAP read-only (`:ro`). The container runs as uid 10001 — never `chmod`/`chown` the host directory to fix mount perms; either rely on world-readable bits or fix the file owner. |
 | **N9** | Healthchecks are required on `blueflow-psql`, `blueflow-redis`, `blueflow`, `viper-psql`, `viper`. `depends_on: { ...: { condition: service_healthy } }` is the merge gate, not optimistic ordering. |
 | **N10** | Volumes for state are named (`tapirxl-spool`, `blueflow-pgdata`, `viper-pgdata`). Anonymous volumes are forbidden — `docker compose down --volumes` must reliably reset the demo. |
@@ -205,26 +205,26 @@ volume set.
 These are the binding promises external images make to the demo. Failures
 here are upstream bugs, not compose tweaks.
 
-### `virtalabsinc/tapirxl:demo-0.3.0`
+### `virtalabsinc/tapirxl:demo-0.3.1`
 
 - Single ENTRYPOINT switching on `$TAPIRXL_MODE`:
-  - `pcap` (default) → `tapirxl parse $TAPIRXL_PCAP_PATH --json | vector --config-toml /etc/vector/upload-vector.pcap.toml`, then exits.
-  - `live` → long-running raw-socket capture on `$TAPIRXL_INTERFACE` (Phase 2; ships in TapirXL B1).
-- Bakes both Vector configs in `/etc/vector/`:
+  - `pcap` (default) → `tapirxl parse $TAPIRXL_PCAP_PATH --json | vector --config-toml /etc/vector/upload-vector.stdin.toml`, then exits.
+  - `live` → long-running raw-socket capture on `$TAPIRXL_INTERFACE`. Verified working in `demo-0.3.1`.
+- Bakes Vector configs in `/etc/vector/`:
   - `upload-vector.toml` (compose long-running, file source)
-  - `upload-vector.pcap.toml` (one-shot, stdin source)
+  - `upload-vector.stdin.toml` (one-shot, stdin source — was `upload-vector.pcap.toml` in `demo-0.3.0`)
   - `upload-vector.vrl` (shared translation; `$UPLOAD_VECTOR_VRL_PATH` already set)
 - Reads from env: `BLUEFLOW_URL`, `BLUEFLOW_TOKEN`, `TAPIRXL_PCAP_PATH` (pcap mode), `TAPIRXL_INTERFACE` (live mode).
 - Non-root user uid 10001.
-- `live` mode currently exits 64 with a B1 reference until TapirXL ships live capture.
 
 Authoritative version of this contract: `TapirXL/packaging/docker/README.md` "Unified demo image" + `demo_playbook.md §4`.
 
-### `virtalabsinc/blueflow:demo-0.3.0`
+### `virtalabsinc/blueflow:demo-0.3.1`
 
 - Auto-creates `admin/admin` on first boot (`DEFAULT_USERNAME` + `DEFAULT_PASSWORD`).
 - Runs migrations when `RUN_MIGRATIONS=1`.
 - Honors `API_TOKEN` env var: if set, the bootstrap installs that exact value as the `admin` user's DRF token (`Token.objects.get_or_create`); otherwise generates one and prints to stdout. **The demo requires the env-var path** so the token is deterministic across container restarts (N3).
+- Bundles the `redis` Python package (fixed in `demo-0.3.1`; the `uv pip install redis` workaround is no longer needed).
 - Exposes `PUT /api/assets/upsert/` accepting the `AssetUpsertPayload` shape from `TapirXL/configs/upload-vector.vrl`. Must accept `Authorization: Token <hex>` (DRF, not Bearer) and `Content-Type: application/json`.
 - Healthcheck on `/api/`.
 
@@ -250,7 +250,7 @@ Authoritative version of this contract: `TapirXL/packaging/docker/README.md` "Un
 ```fish
 docker compose pull
 docker compose up -d \
-  blueflow-psql blueflow-redis blueflow blueflow-worker \
+  blueflow-psql blueflow-redis blueflow \
   viper-psql viper
 
 # Wait for healthchecks.
@@ -281,7 +281,7 @@ Pre-flight (§5.3) is mandatory before ingest. After Phase 2 boot:
 
 ```fish
 docker compose --profile live up -d tapirxl replay
-docker compose logs -f tapirxl blueflow-worker
+docker compose logs -f tapirxl blueflow
 ```
 
 Audience-visible state changes:
@@ -298,10 +298,11 @@ Manual `sync` is forbidden during the talk track — if Viper stays empty, the i
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | `tapirxl` exits with `401` | `BLUEFLOW_API_TOKEN` mismatch between `blueflow` and `tapirxl` | Both must reference `${BLUEFLOW_API_TOKEN}` from `.env` (N3) |
-| `tapirxl` exits with `415 Unsupported Media Type` | Stale demo image without explicit `Content-Type` header | `docker compose pull tapirxl` (TapirXL D5 fix is in `demo-0.3.0+`) |
+| `tapirxl` exits with `415 Unsupported Media Type` | Stale demo image without explicit `Content-Type` header | `docker compose pull tapirxl` |
 | Vector logs `failed to lookup address information: blueflow` | Services not on the same network | `docker network inspect tapirxl-demo_default`; both must be members |
-| Phase 1 container hangs (180s+) | Compose accidentally mounting `upload-vector.toml` (file source) over the pcap config | N7: never override the image's baked configs in pcap mode |
-| BlueFlow has assets, Viper stays empty | §5.3 webhook not registered, or `blueflow-worker` not running | Re-run `just integrate`; check `just logs` |
+| Phase 1 container hangs (180s+) | Compose accidentally mounting `upload-vector.toml` (file source) over the stdin config | N7: never override the image's baked configs in pcap mode |
+| `just capture` exits 78 with no output | `init/tapirxl-pretty-ingest.sh` is referencing an old config name. In `demo-0.3.1` the one-shot config is `upload-vector.stdin.toml` (renamed from `upload-vector.pcap.toml`). | Ensure the script references `/etc/vector/upload-vector.stdin.toml`. |
+| BlueFlow has assets, Viper stays empty | §5.3 webhook not registered, or sync never triggered | Re-run `just integrate`; check `just logs` |
 | Celery 4xx to Viper callback | Stale `auth_token` / wrong `webhook_url` | Wipe Postgres volumes, re-register from scratch (`just fresh && just integrate`) |
 | Replay starts before tapirxl is listening | `depends_on: service_started` is too eager for live mode | Add a healthcheck to tapirxl's live mode; increase replay startup sleep |
 | `WARN ... file too small to fingerprint` | Vector file source race (compose long-running mode only) | Benign; ignore. Pcap mode does not have this. |

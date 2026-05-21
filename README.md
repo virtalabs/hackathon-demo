@@ -17,7 +17,7 @@ ARPA-H Hackathon demo of the **PATCH Vulnerability Mitigation Platform (VMP)** �
 | ----------------- | ---------------------------------- | ------------------------------------------------- |
 | `tapirxl`         | `virtalabsinc/tapirxl:demo-<ver>`  | Packet parser + Vector shipper                    |
 | `blueflow`        | `virtalabsinc/blueflow:demo-<ver>` | Django REST API; asset store                      |
-| `blueflow-worker` | same image                         | Celery worker; pushes to Viper                    |
+| `blueflow-worker` | same image                         | Celery worker (not started by default; `CELERY_TASK_ALWAYS_EAGER=True` in dev) |
 | `blueflow-psql`   | `postgres:16-alpine`               | BlueFlow DB                                       |
 | `blueflow-redis`  | `redis:7-alpine`                   | Celery broker                                     |
 | `viper`           | built from source (viper repo)     | Next.js UI; mirrors BlueFlow                      |
@@ -58,7 +58,7 @@ docker compose exec viper npm run db:create-test-api-key
 export VIPER_API_KEY=<key>
 just integrate             # Create integration with BlueFlow
 
-just demo                  # live replay → BlueFlow → Viper (not ready)
+just demo                  # live replay → BlueFlow → Viper
 just fresh                 # teardown + wipe volumes
 ```
 

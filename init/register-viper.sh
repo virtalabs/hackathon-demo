@@ -51,4 +51,4 @@ curl -sS -X POST "${VIPER_URL}/api/trpc/integrations.triggerSync?batch=1" \
 
 echo ""
 echo "==> Integration registered and sync triggered. Watch logs:"
-echo "    docker compose logs -f blueflow-worker inngest"
+echo "    docker compose logs -f blueflow inngest"

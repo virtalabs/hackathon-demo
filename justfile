@@ -14,7 +14,7 @@ parse:
 
 # Boot stack + seed BlueFlow
 boot:
-    docker compose up -d blueflow-psql blueflow-redis blueflow blueflow-worker viper-psql viper inngest
+    docker compose up -d blueflow-psql blueflow-redis blueflow viper-psql viper inngest
     docker compose exec blueflow bash /demo-init/seed-blueflow.sh
 
 # Run one-shot PCAP ingest
@@ -35,7 +35,7 @@ integrate:
 # before `up -d tapirxl replay` guarantees the runserver populates its
 # cache from the correct row on the first probe.
 demo:
-    docker compose up -d blueflow-psql blueflow-redis blueflow blueflow-worker viper-psql viper inngest
+    docker compose up -d blueflow-psql blueflow-redis blueflow viper-psql viper inngest
     docker compose exec blueflow bash /demo-init/seed-blueflow.sh
     TAPIRXL_MODE=live docker compose --profile live up -d tapirxl replay
     @echo ""
@@ -54,9 +54,9 @@ fresh:
 check $SERVICE:
     bash init/check.sh $SERVICE
 
-# Tail tapirxl + blueflow-worker logs
+# Tail tapirxl + blueflow logs
 logs:
-    docker compose logs -f tapirxl blueflow-worker
+    docker compose logs -f tapirxl blueflow
 
 # Show service health status
 ps:

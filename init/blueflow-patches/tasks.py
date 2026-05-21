@@ -1,26 +1,31 @@
-"""Bind-mount overlay for `virtalabsinc/blueflow:demo-0.3.0`.
+"""Bind-mount overlay for `virtalabsinc/blueflow:demo-0.3.0` through `demo-0.3.1`.
 
 This file REPLACES `/app/blueflow/celery/tasks.py` inside the BlueFlow
-container (see `compose.yaml` blueflow.volumes). It exists solely to
-work around upstream defects in `demo-0.3.0` that block Phase 2 asset
-propagation to Viper:
+container (see `compose.yaml` blueflow.volumes). It works around two
+upstream defects that block Phase 2 asset propagation to Viper:
 
     U4  ViperWebhookRequest is annotated `since: str` but DRF passes a
         `datetime`; `ViperWebhookResponse.to_dict()` returns it raw,
         causing `requests.post(json=...)` to raise
         `TypeError: Object of type datetime is not JSON serializable`.
+        Verified still broken in `demo-0.3.1`. Tracked upstream as B4.
 
     U5  `ViperAsset` / `ViperWebhookResponse` use snake_case keys, a
         `vendor`/`model`/`udi`/`id` shape, and `status="active"`, none
         of which match Viper's `/api/v1/assets/integrationUpload/{token}`
         contract (camelCase, `ip` + `upstreamApi` + `vendorId` required,
         `status` enum is `Active|Decommissioned|Maintenance`).
+        Verified still broken in `demo-0.3.1`. Tracked upstream as B5.
 
 We bypass the broken model `to_dict()` methods and build the wire
 payload directly from `Asset` rows in the shape Viper expects.
 
-Remove this file (and its bind-mount in compose.yaml) once
-`virtalabsinc/blueflow:demo-0.3.1` ships a fix.
+**This file is the canonical source of truth for the wire payload we
+POST to Viper's `integrationUpload` endpoint.** Because the Viper-side
+`integrationUpload` schema is still evolving, removal or update may be
+required when Viper's contract settles — independent of when BlueFlow
+ships a B4/B5 fix. Target for removal: `virtalabsinc/blueflow:demo-0.3.2+`
+*and* a stable Viper `integrationUpload` schema. See PLAYBOOK §Failure modes.
 """
 
 from __future__ import annotations

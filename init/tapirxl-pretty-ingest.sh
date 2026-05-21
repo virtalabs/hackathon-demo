@@ -8,4 +8,4 @@ set -euo pipefail
 : "${TAPIRXL_PCAP_PATH:?TAPIRXL_PCAP_PATH is required}"
 
 tapirxl parse "$TAPIRXL_PCAP_PATH" --json 2>/dev/null \
- | vector --config-toml /etc/vector/upload-vector.pcap.toml >/dev/null 2>&1
+ | vector --config-toml /etc/vector/upload-vector.stdin.toml >/dev/null 2>&1

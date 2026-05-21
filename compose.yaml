@@ -36,7 +36,7 @@ services:
       - clinical_demo
 
   blueflow:
-    image: virtalabsinc/blueflow:${BLUEFLOW_TAG:-demo-0.3.0}
+    image: virtalabsinc/blueflow:${BLUEFLOW_TAG:-demo-0.3.1}
     depends_on:
       blueflow-psql:
         condition: service_healthy
@@ -53,17 +53,6 @@ services:
       DEFAULT_USERNAME: admin
       DEFAULT_PASSWORD: admin
       API_TOKEN: ${BLUEFLOW_API_TOKEN:?BLUEFLOW_API_TOKEN required — copy .env.example to .env}
-    # Workaround: virtalabsinc/blueflow:demo-0.3.0 ships without the `redis`
-    # Python package, but blueflow.celery.tasks.viper_webhook imports it even
-    # in CELERY_TASK_ALWAYS_EAGER mode (Phase 2 sync 500s otherwise).
-    # The image entrypoint does `uv sync --frozen --no-dev && migrate && exec "$@"`,
-    # which would clobber a pre-install; instead we override `command` so the
-    # pip install runs AFTER the entrypoint's sync, then exec runserver.
-    # Remove once demo-0.3.1 (or later) bundles redis. See PLAYBOOK §Failure modes.
-    command:
-      - /bin/bash
-      - -c
-      - uv pip install --quiet redis && exec /app/.venv/bin/python project/manage.py runserver 0.0.0.0:8000
     volumes:
       - ./init:/demo-init:ro
       # Bind-mount overlay: surgical fix for U4 (datetime not JSON serializable)
@@ -87,6 +76,11 @@ services:
     networks:
       - clinical_demo
 
+  # blueflow-worker is intentionally NOT started by `just boot` or `just demo`.
+  # DJANGO_SETTINGS_MODULE=project.settings.development sets CELERY_TASK_ALWAYS_EAGER=True,
+  # so the viper_webhook task runs synchronously inside the `blueflow` web container.
+  # The service definition is kept for prod-topology parity; start it manually with
+  # `docker compose up -d blueflow-worker` if you need to test with a real Celery broker.
   blueflow-worker:
     image: virtalabsinc/blueflow:${BLUEFLOW_TAG:-demo-0.3.1}
     depends_on:
@@ -193,7 +187,7 @@ services:
   # ── TapirXL ─────────────────────────────────────────────────────────────────
 
   tapirxl:
-    image: virtalabsinc/tapirxl:${TAPIRXL_TAG:-demo-0.3.0}
+    image: virtalabsinc/tapirxl:${TAPIRXL_TAG:-demo-0.3.1}
     depends_on:
       blueflow:
         condition: service_healthy
