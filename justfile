@@ -27,8 +27,13 @@ capture:
 integrate:
     bash init/integrate.sh
 
-# Start live replay + tapirxl listener (Phase 2)
-demo:
+# Start live replay + tapirxl listener (Phase 2).
+# Depends on `boot` so seed-blueflow.sh runs (admin/admin user, API token,
+# 'core' Waffle switch active=True) BEFORE TapirXL begins PUTting to
+# /api/assets/upsert/. Skipping `boot` makes every Vector request return
+# 404 from waffle.mixins.WaffleSwitchMixin.invalid_waffle(), and the
+# runserver's per-process LocMemCache locks that 404 in until restart.
+demo: boot
     TAPIRXL_MODE=live docker compose --profile live up -d tapirxl replay
     @echo ""
     @echo "==> Live demo running. Watch logs:"
