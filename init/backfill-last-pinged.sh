@@ -2,8 +2,8 @@
 # Runs on: host (repo root)
 # Invoked by: init/integrate.sh
 #
-# Workaround U3: TapirXL ingest leaves Asset.last_pinged=NULL, but BlueFlow's
-# Viper webhook filters with last_pinged__gte=since. See PLAYBOOK failure modes.
+# Workaround B3: TapirXL ingest leaves Asset.last_pinged=NULL, but BlueFlow's
+# Viper webhook filters with last_pinged__gte=since. See PLAYBOOK / BLUEFLOW_BUGS.md.
 set -euo pipefail
 
 echo "==> Backfilling Asset.last_pinged for Viper sync..."

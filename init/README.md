@@ -7,28 +7,29 @@ Scripts under `init/` fall into two groups. Host scripts are invoked by `just` f
 | Script | `just` recipe | Role |
 |--------|---------------|------|
 | `parse.sh` | `parse` | PCAP → JSON only (no BlueFlow upload) |
-| `capture.sh` | `capture` | Boot stack, seed BlueFlow, one-shot ingest |
-| `integrate.sh` | `integrate` | U3 backfill + `register-viper.sh` |
-| `backfill-last-pinged.sh` | _(via integrate)_ | Stamp `Asset.last_pinged` before Viper sync |
-| `register-viper.sh` | _(via integrate)_ | BlueFlow ↔ Viper §5.3 ceremony |
+| `capture.sh` | `capture` | One-shot PCAP ingest (`docker compose run tapirxl`; run after `just boot`) |
+| `integrate.sh` | `integrate` | B3 backfill + `register-viper.sh` |
+| `backfill-last-pinged.sh` | _(via integrate)_ | Stamp `Asset.last_pinged` before Viper sync (B3) |
+| `register-viper.sh` | _(via integrate)_ | BlueFlow ↔ Viper integration ceremony |
 | `check.sh` | `check` | Asset counts from BlueFlow and Viper APIs |
 
 ## Container (runs inside compose services)
 
 | Script | Invoked from | Role |
 |--------|--------------|------|
-| `seed-blueflow.sh` | `capture` → `docker compose exec blueflow` | Admin user + API token from env |
-| `tapirxl-pretty-ingest.sh` | `capture` → `docker compose run tapirxl` | Pretty-printed ingest + Vector upload |
+| `seed-blueflow.sh` | `just boot` / `just demo` → `docker compose exec blueflow` | Admin user + API token from env; activates `core` waffle switch |
+| `tapirxl-pretty-ingest.sh` | `just capture` → `docker compose run tapirxl` | Pretty-printed ingest + Vector upload |
 
-## Other
+## Archived (no longer mounted)
 
 | Path | Role |
 |------|------|
-| `blueflow-patches/tasks.py` | Bind-mount overlay for U4/U5 (see PLAYBOOK) |
+| `blueflow-patches/tasks.py` | **Removed in `demo-0.3.4`.** Was a bind-mount overlay for B4 (datetime JSON) and B5 (wire payload shape). Kept in-repo as historical reference only — do not remount. See `.claude/BLUEFLOW_BUGS.md`. |
 
-**Viper API key** is not a `just` recipe. After `just capture`:
+**Viper API key** is not a `just` recipe. After Phase 1 (`just boot` + `just capture`):
 
 ```bash
 docker compose exec viper npm run db:create-test-api-key
 export VIPER_API_KEY=<key printed above>
+just integrate
 ```

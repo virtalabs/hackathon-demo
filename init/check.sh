@@ -6,8 +6,7 @@ set -euo pipefail
 if [ "$SERVICE" = "blueflow" ]; then
   echo "==> $SERVICE (http://localhost:8000/api/assets/)"
   curl -sS -H "Authorization: Token ${BLUEFLOW_API_TOKEN}" \
-    http://localhost:8000/api/assets/ \
-    | jq '{count: .count, names: [.results[].display_name]}'
+    http://localhost:8000/api/assets/ | jq .
   echo ""
 elif [ "$SERVICE" = "viper" ]; then
   if [ -z "${VIPER_API_KEY:-}" ]; then
@@ -24,7 +23,7 @@ elif [ "$SERVICE" = "viper" ]; then
     echo "Regenerate: docker compose exec viper npm run db:create-test-api-key" >&2
     exit 1
   fi
-  echo "${viper_body}" | jq '{count: (.totalCount // 0), names: [(.items // [])[] | (.hostname // .ip // .macAddress)]}'
+  echo "${viper_body}" | jq .
   echo ""
 else
   echo "Invalid service: $SERVICE" >&2

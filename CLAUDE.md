@@ -74,7 +74,7 @@ Required tools:
 
 ## Service Inventory and Image Pins
 
-TapirXL and BlueFlow are pulled as published images from `virtalabsinc/*` on Docker Hub. **Pin exact tags in `compose.yaml`; never use `latest`.** Tag scheme is `demo-<semver>` (e.g. `demo-0.3.1`). Viper, `viper-psql`, and `inngest` are currently built from local source (viper repo); `replay` is built from this repo.
+TapirXL and BlueFlow are pulled as published images from `virtalabsinc/*` on Docker Hub. **Pin exact tags in `.env`; never use `latest`.** Tag scheme is `demo-<semver>` (e.g. `demo-0.3.4` for BlueFlow, `demo-0.3.1` for TapirXL). Viper, `viper-psql`, and `inngest` are currently built from local source (viper repo); `replay` is built from this repo.
 
 | Service           | Image / Source                                   | Role | Pinned where |
 | ----------------- | ------------------------------------------------ | ---- | ------------ |
@@ -219,14 +219,17 @@ here are upstream bugs, not compose tweaks.
 
 Authoritative version of this contract: `TapirXL/packaging/docker/README.md` "Unified demo image" + `demo_playbook.md §4`.
 
-### `virtalabsinc/blueflow:demo-0.3.1`
+### `virtalabsinc/blueflow:demo-0.3.4` (minimum for Phase 2 without compose overlays)
 
 - Auto-creates `admin/admin` on first boot (`DEFAULT_USERNAME` + `DEFAULT_PASSWORD`).
 - Runs migrations when `RUN_MIGRATIONS=1`.
 - Honors `API_TOKEN` env var: if set, the bootstrap installs that exact value as the `admin` user's DRF token (`Token.objects.get_or_create`); otherwise generates one and prints to stdout. **The demo requires the env-var path** so the token is deterministic across container restarts (N3).
-- Bundles the `redis` Python package (fixed in `demo-0.3.1`; the `uv pip install redis` workaround is no longer needed).
+- Bundles the `redis` Python package (since `demo-0.3.1`; the `uv pip install redis` shim is removed).
 - Exposes `PUT /api/assets/upsert/` accepting the `AssetUpsertPayload` shape from `TapirXL/configs/upload-vector.vrl`. Must accept `Authorization: Token <hex>` (DRF, not Bearer) and `Content-Type: application/json`.
+- `viper_webhook` Celery task (`CELERY_TASK_ALWAYS_EAGER=True` in dev): serializes `since` to ISO-8601 for `requests.post(json=...)` (B4 fixed). Outgoing `integrationUpload` pages use `items[]` with camelCase keys (`ip`, `upstreamApi`, `vendorId`, `status: Active`, …) matching Viper's contract (B5 fixed). **Do not** bind-mount `init/blueflow-patches/tasks.py`.
 - Healthcheck on `/api/`.
+
+Older tags (`demo-0.3.0`–`demo-0.3.1`) required a `tasks.py` bind-mount for Phase 2; see `.claude/BLUEFLOW_BUGS.md`.
 
 ### `viper:demo-0.1.0`
 
@@ -303,6 +306,9 @@ Manual `sync` is forbidden during the talk track — if Viper stays empty, the i
 | Phase 1 container hangs (180s+) | Compose accidentally mounting `upload-vector.toml` (file source) over the stdin config | N7: never override the image's baked configs in pcap mode |
 | `just capture` exits 78 with no output | `init/tapirxl-pretty-ingest.sh` is referencing an old config name. In `demo-0.3.1` the one-shot config is `upload-vector.stdin.toml` (renamed from `upload-vector.pcap.toml`). | Ensure the script references `/etc/vector/upload-vector.stdin.toml`. |
 | BlueFlow has assets, Viper stays empty | §5.3 webhook not registered, or sync never triggered | Re-run `just integrate`; check `just logs` |
+| `TypeError: datetime is not JSON serializable` in `viper_webhook` | `BLUEFLOW_TAG` < `demo-0.3.4` or `tasks.py` bind-mount removed but image not pulled | `BLUEFLOW_TAG=demo-0.3.4`, remove `tasks.py` volume, `docker compose pull blueflow && just fresh` |
+| BlueFlow 8 assets; fewer in Viper with `upstreamApi` → BlueFlow | Webhook `202` + task succeeded; Viper item handling | Re-run `just integrate`; compare MACs. Upstream BlueFlow payload is valid in `demo-0.3.4` — likely Viper-side. |
+| `viper_webhook` ~0.05s, nothing in Viper | B3: `last_pinged` null on all assets | `just integrate` (runs backfill) or `bash init/backfill-last-pinged.sh` |
 | Celery 4xx to Viper callback | Stale `auth_token` / wrong `webhook_url` | Wipe Postgres volumes, re-register from scratch (`just fresh && just integrate`) |
 | Replay starts before tapirxl is listening | `depends_on: service_started` is too eager for live mode | Add a healthcheck to tapirxl's live mode; increase replay startup sleep |
 | `WARN ... file too small to fingerprint` | Vector file source race (compose long-running mode only) | Benign; ignore. Pcap mode does not have this. |
@@ -322,6 +328,7 @@ Manual `sync` is forbidden during the talk track — if Viper stays empty, the i
 - Do NOT introduce a Phase 1.5 mode. The boundary between Phase 1 (engineering) and Phase 2 (audience) is the `live` profile + `TAPIRXL_MODE`.
 - Do NOT modify the canonical PCAP without coordinating a TapirXL golden regenerate (N6).
 - Do NOT bake credentials, API tokens, or webhook secrets into committed YAML/scripts. Everything sensitive flows through `.env`.
+- Do NOT bind-mount `init/blueflow-patches/tasks.py` when using `virtalabsinc/blueflow:demo-0.3.4+`. The image ships the fixed `viper_webhook` task.
 
 ---
 
@@ -331,7 +338,7 @@ Track these in your repo's issue tracker; they're the demo's open blockers acros
 
 | ID | Item | Owner | Blocking |
 | --- | --- | --- | --- |
-| **C2** | `virtalabsinc/blueflow:demo-<tag>` honors `BLUEFLOW_API_TOKEN` env var (env-driven, not runtime-generated) | TA1 BlueFlow | N3 / clean Phase 1 boot |
+| **C2** | `virtalabsinc/blueflow:demo-<tag>` honors `BLUEFLOW_API_TOKEN` env var (env-driven, not runtime-generated) | TA1 BlueFlow | Satisfied in `demo-0.3.4` |
 | **C3** | `virtalabsinc/viper:demo-<tag>` published with stable tRPC + integrationUpload contract | TA1 Viper | Phase 2 |
 | **C4** | BlueFlow no-op short-circuit on identical-state writes | TA1 BlueFlow | Phase 2 hygiene (eliminates duplicate `historicalasset` rows) |
 | **C7** | Talk-track timing pass with stopwatch | Demo presenter | Phase 2 rehearsal |

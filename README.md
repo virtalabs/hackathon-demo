@@ -16,7 +16,7 @@ ARPA-H Hackathon demo of the **PATCH Vulnerability Mitigation Platform (VMP)** â
 | Service           | Image                              | Role                                              |
 | ----------------- | ---------------------------------- | ------------------------------------------------- |
 | `tapirxl`         | `virtalabsinc/tapirxl:demo-<ver>`  | Packet parser + Vector shipper                    |
-| `blueflow`        | `virtalabsinc/blueflow:demo-<ver>` | Django REST API; asset store                      |
+| `blueflow`        | `virtalabsinc/blueflow:demo-<ver>` | Django REST API; asset store (pin `demo-0.3.4+`)  |
 | `blueflow-worker` | same image                         | Celery worker (not started by default; `CELERY_TASK_ALWAYS_EAGER=True` in dev) |
 | `blueflow-psql`   | `postgres:16-alpine`               | BlueFlow DB                                       |
 | `blueflow-redis`  | `redis:7-alpine`                   | Celery broker                                     |
@@ -46,8 +46,10 @@ ARPA-H Hackathon demo of the **PATCH Vulnerability Mitigation Platform (VMP)** â
 ## Usage
 
 ```bash
-cp .env.example .env       # set BLUEFLOW_API_TOKEN
+cp .env.example .env       # set BLUEFLOW_API_TOKEN; pin BLUEFLOW_TAG=demo-0.3.4
+docker compose pull        # optional; pull pinned TapirXL + BlueFlow images
 
+just fresh                 # optional; wipe volumes before a clean run
 just boot                  # Boot stack + seed BlueFlow
 just parse                 # Parse only (no BlueFlow upload)
 just capture               # Parse and ingest (TapirXL & BlueFlow only)
@@ -65,3 +67,4 @@ just fresh                 # teardown + wipe volumes
 **Note:** run `just -l` to list all available recipes.
 
 See [`PLAYBOOK.md`](PLAYBOOK.md) for the full runbook and failure modes.
+Upstream BlueFlow/Viper workaround history: [`.claude/BLUEFLOW_BUGS.md`](.claude/BLUEFLOW_BUGS.md).

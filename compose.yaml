@@ -36,7 +36,7 @@ services:
       - clinical_demo
 
   blueflow:
-    image: virtalabsinc/blueflow:${BLUEFLOW_TAG:-demo-0.3.1}
+    image: virtalabsinc/blueflow:${BLUEFLOW_TAG:-demo-0.3.4}
     depends_on:
       blueflow-psql:
         condition: service_healthy
@@ -77,7 +77,7 @@ services:
   # The service definition is kept for prod-topology parity; start it manually with
   # `docker compose up -d blueflow-worker` if you need to test with a real Celery broker.
   blueflow-worker:
-    image: virtalabsinc/blueflow:${BLUEFLOW_TAG:-demo-0.3.1}
+    image: virtalabsinc/blueflow:${BLUEFLOW_TAG:-demo-0.3.4}
     depends_on:
       blueflow:
         condition: service_healthy

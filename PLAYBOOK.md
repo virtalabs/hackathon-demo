@@ -1,11 +1,11 @@
 # PATCH VMP Demo Playbook
 
-|              |                                                                                     |
-| ------------ | ----------------------------------------------------------------------------------- |
-| **Platform** | PATCH Vulnerability Mitigation Platform (VMP) — TA1                                 |
-| **Stack**    | TapirXL → BlueFlow → Viper                                                          |
-| **Phase 1**  | Engineering smoke: mounted PCAP → BlueFlow upsert (one-shot)                        |
-| **Phase 2**  | Audience demo: Viper asset sync via Inngest + live tcpreplay (`tapirxl:demo-0.3.1`) |
+|              |                                                                                                            |
+| ------------ | ---------------------------------------------------------------------------------------------------------- |
+| **Platform** | PATCH Vulnerability Mitigation Platform (VMP) — TA1                                                        |
+| **Stack**    | TapirXL → BlueFlow → Viper                                                                                 |
+| **Phase 1**  | Engineering smoke: mounted PCAP → BlueFlow upsert (one-shot)                                               |
+| **Phase 2**  | Audience demo: Viper asset sync via Inngest + live tcpreplay (`blueflow:demo-0.3.4`, `tapirxl:demo-0.3.1`) |
 
 ---
 
@@ -21,7 +21,9 @@ jq
 # First-time setup
 cp .env.example .env
 # Edit .env — set BLUEFLOW_API_TOKEN to a value of your choice.
+# Pin BLUEFLOW_TAG=demo-0.3.4 (required for Phase 2 without compose workarounds).
 # The same token is used by both BlueFlow and TapirXL; do not use two values.
+docker compose pull
 ```
 
 ---
@@ -63,17 +65,9 @@ just check blueflow
 # expect: count = 8, all assets named
 ```
 
-**Pass criteria:**
-
-- First run: 8 × `201 Created`
-- Re-run: 8 × `200 OK` (idempotent)
-- All assets have `manufacturer`, `model`, `category`, `open_ports_tcp`, `external_keys.tapirxl_confidence` populated
-
 ---
 
 ## Demonstrate full device and vulnerability capture
-
-Phase 1 must pass first. Run on the same running stack.
 
 ### Step 1 — Generate Viper API key
 
@@ -98,9 +92,11 @@ just integrate
 1. Viper Inngest generates a one-time callback token
 2. POSTs `{callback, since, max_pages, page_size}` to BlueFlow's `/api/viper/webhook/`
 3. BlueFlow executes the Celery task synchronously (`CELERY_TASK_ALWAYS_EAGER=True` in dev settings)
-4. BlueFlow POSTs paginated assets to `http://viper:3000/api/v1/assets/integrationUpload/{token}`
+4. BlueFlow POSTs paginated assets to `http://viper.local:3000/api/v1/assets/integrationUpload/{token}` (in-cluster hostname; see `compose.yaml` `viper.local` alias)
 
-The `blueflow-worker` container is not required in this configuration.
+The `blueflow-worker` container is not required in this configuration. Stock `blueflow/celery/tasks.py` from `demo-0.3.4` is used.
+
+`just integrate` also runs `init/backfill-last-pinged.sh` (workaround **B3**): TapirXL upsert leaves `Asset.last_pinged` null, but the webhook queryset filters on `last_pinged__gte=since`.
 
 ### Step 3 — Verify assets in Viper
 
@@ -113,7 +109,15 @@ just check viper
 open http://localhost:3000
 ```
 
-Both should show the same 8 assets. Viper re-syncs automatically every 5 minutes via Inngest cron.
+```bash
+curl -sS -H "Authorization: Bearer ${VIPER_API_KEY}" \
+  "http://localhost:3000/api/v1/assets?pageSize=100" \
+  | jq '[.items[] | select(.upstreamApi | test("localhost:8000")) | {hostname, mac: .macAddress, upstream: .upstreamApi}]'
+```
+
+Viper's total asset count may be higher than the asset count in BlueFlow due to seed data.
+After `just fresh`, expect the eight PCAP `display_name` values to appear in that filtered list.
+If some are missing while `docker compose logs blueflow` shows `viper_webhook` **succeeded** with no `TypeError`, treat it as a Viper `integrationUpload` item-handling issue (see failure modes). Viper re-syncs automatically every 5 minutes via Inngest cron.
 
 ### Step 4 — Live replay
 
@@ -135,20 +139,3 @@ lines confirming the pipeline is live.
 ```bash
 just fresh   # wipes all named volumes; start from Phase 1 on next run
 ```
-
----
-
-## Common failure modes
-
-| Symptom                                                          | Cause                                                                                                                                                                                                                                                                                                | Fix                                                                                                                                                                                                                                                                                                     |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tapirxl` exits `401`                                            | `BLUEFLOW_API_TOKEN` mismatch                                                                                                                                                                                                                                                                        | Both services read the same `.env` value — verify                                                                                                                                                                                                                                                       |
-| `tapirxl` exits `415`                                            | Stale image missing `Content-Type` header                                                                                                                                                                                                                                                            | `docker compose pull tapirxl`                                                                                                                                                                                                                                                                           |
-| Vector log `Http status: 404 Not Found` on `/api/assets/upsert/` | `just demo` was run before seed-blueflow.sh (or seed-blueflow.sh failed). BlueFlow's `AssetViewSet` inherits `WaffleSwitchMixin(waffle_switch='core')`, so without an active `core` switch every viewset 404s; runserver's per-process `LocMemCache` then locks that 404 in until BlueFlow restarts. | `just demo` now seeds inline before bringing up tapirxl/replay. If you hit this on an already-running stack (e.g. seed-blueflow.sh was missing the active=True flip on a stale row): `docker compose exec blueflow bash /demo-init/seed-blueflow.sh && docker compose restart blueflow tapirxl replay`. |
-| Vector logs `failed to lookup address: blueflow`                 | Network split                                                                                                                                                                                                                                                                                        | `docker network inspect tapirxl-demo_clinical_demo` — both must be members                                                                                                                                                                                                                              |
-| BlueFlow assets present; Viper stays empty                       | Integration not registered or sync not triggered                                                                                                                                                                                                                                                     | Re-run `just integrate`                                                                                                                                                                                                                                                                                 |
-| `just integrate` fails Step A with `400`                         | `VIPER_API_KEY` stale or DB reset                                                                                                                                                                                                                                                                    | Re-run `docker compose exec viper npm run db:create-test-api-key` and export the new key                                                                                                                                                                                                                |
-| `just integrate` fails to extract integration ID                 | Viper returned an error                                                                                                                                                                                                                                                                              | Check Step A response printed above the error                                                                                                                                                                                                                                                           |
-| Viper UI blank / 502                                             | Viper still initializing                                                                                                                                                                                                                                                                             | Wait for `docker compose ps` to show `viper` as `(healthy)`                                                                                                                                                                                                                                             |
-| Assets disappear after `just fresh`                              | Expected — volumes wiped                                                                                                                                                                                                                                                                             | Start from Phase 1                                                                                                                                                                                                                                                                                      |
-| `just check` Viper section: `ERROR: Viper API: Unauthorized`     | `VIPER_API_KEY` unset / stale                                                                                                                                                                                                                                                                        | `docker compose exec viper npm run db:create-test-api-key` then `export VIPER_API_KEY=<key>`                                                                                                                                                                                                            |
