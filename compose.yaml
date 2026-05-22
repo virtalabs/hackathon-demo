@@ -55,11 +55,6 @@ services:
       API_TOKEN: ${BLUEFLOW_API_TOKEN:?BLUEFLOW_API_TOKEN required — copy .env.example to .env}
     volumes:
       - ./init:/demo-init:ro
-      # Bind-mount overlay: surgical fix for U4 (datetime not JSON serializable)
-      # and U5 (BlueFlow's Viper webhook payload shape does not match Viper's
-      # /api/v1/assets/integrationUpload schema). See init/blueflow-patches/tasks.py
-      # for full rationale and removal instructions. PLAYBOOK §Failure modes.
-      - ./init/blueflow-patches/tasks.py:/app/blueflow/celery/tasks.py:ro
     ports:
       - "8000:8000"
     healthcheck:

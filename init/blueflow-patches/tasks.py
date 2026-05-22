@@ -78,24 +78,20 @@ def _viper_asset_payload(asset: Any, blueflow_base_url: str) -> dict[str, Any]:
     raw_status = (getattr(asset, "status", None) or "Active").capitalize()
     status = raw_status if raw_status in _VALID_STATUSES else "Active"
     upstream_api = f"{blueflow_base_url.rstrip('/')}/api/assets/{asset.id}/"
-    vendor_id = (
-        str(getattr(asset, "nic_vendor", "") or "")
-        or str(getattr(asset, "manufacturer", "") or "")
-        or "unknown"
-    )
-
-    return {
+    category = getattr(asset, "category", None)
+    manufacturer = str(getattr(asset, "manufacturer", "") or "")
+    payload: dict[str, Any] = {
         "ip": ip,
         "upstreamApi": upstream_api,
-        "vendorId": vendor_id,
+        "vendorId": manufacturer,
         "hostname": hostname,
         "macAddress": mac or None,
         "serialNumber": serial,
-        "networkSegment": None,
-        "role": None,
         "status": status,
-        "location": {},
     }
+    if category:
+        payload["role"] = str(category)
+    return payload
 
 
 def _build_pages(
