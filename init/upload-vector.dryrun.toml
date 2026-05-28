@@ -1,0 +1,29 @@
+# TapirXL BlueFlow upload pipeline — dry-run / dev variant.
+#
+# Reads InventoryRecord JSONL from stdin, runs the image-baked VRL at
+# /etc/vector/upload-vector.vrl (UPLOAD_VECTOR_VRL_PATH), and writes
+# AssetUpsertPayload JSON to stdout. No HTTP sink.
+
+data_dir = "${VECTOR_DATA_DIR:-/var/lib/vector/data}"
+
+[sources.inventory_stdin]
+type = "stdin"
+decoding.codec = "json"
+
+[transforms.to_asset]
+type   = "remap"
+inputs = ["inventory_stdin"]
+file   = "${UPLOAD_VECTOR_VRL_PATH:-configs/upload-vector.vrl}"
+drop_on_error  = true
+drop_on_abort  = true
+reroute_dropped = false
+
+[sinks.dryrun_stdout]
+type   = "console"
+inputs = ["to_asset"]
+target = "stdout"
+
+[sinks.dryrun_stdout.encoding]
+codec = "json"
+[sinks.dryrun_stdout.framing]
+method = "newline_delimited"

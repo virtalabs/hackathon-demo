@@ -18,6 +18,11 @@ demo-pcap := "/pcap/synthetic_philips_demo.pcap"
 parse:
     TAPIRXL_PCAP_PATH={{pcap}} bash init/parse.sh
 
+# Print AssetUpsertPayload JSON (Vector dry-run; no BlueFlow upload).
+# Uses the image-baked VRL at /etc/vector/upload-vector.vrl — not init/tapirxl-patches/.
+dry-run:
+    TAPIRXL_PCAP_PATH={{pcap}} bash init/dry-run.sh
+
 # Boot stack + seed BlueFlow
 boot:
     docker compose up -d blueflow-psql blueflow-redis blueflow viper-psql viper network-flow inngest
