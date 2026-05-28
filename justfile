@@ -49,11 +49,11 @@ integrate *args:
 demo:
     docker compose up -d blueflow-psql blueflow-redis blueflow viper-psql viper network-flow inngest
     docker compose exec blueflow bash /demo-init/seed-blueflow.sh
-    REPLAY_PCAP={{demo-pcap}} TAPIRXL_PCAP_PATH={{demo-pcap}} TAPIRXL_MODE=live \
-        docker compose --profile live up -d tapirxl replay
-    @echo ""
-    @echo "==> Live demo running. Watch logs:"
-    @echo "    just logs"
+    TAPIRXL_TELEMETRY=1 PYTHONUNBUFFERED=1 \
+        TAPIRXL_INITIAL_EMIT_SECS=1 TAPIRXL_QUIESCENCE_SECS=2 TAPIRXL_HEARTBEAT_SECS=15 \
+        REPLAY_PCAP={{demo-pcap}} TAPIRXL_PCAP_PATH={{demo-pcap}} TAPIRXL_MODE=live \
+        docker compose --profile live up -d --force-recreate tapirxl replay
+    bash init/demo-telemetry-stream.sh
 
 # ── Teardown ──────────────────────────────────────────────────────────────────
 
@@ -69,7 +69,7 @@ check $SERVICE:
 
 # Tail tapirxl + blueflow logs
 logs:
-    docker compose logs -f tapirxl blueflow
+    docker compose logs -f blueflow | rg "PUT /api/assets/upsert/"
 
 # Show service health status
 ps:

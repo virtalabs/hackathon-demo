@@ -123,14 +123,24 @@ If some are missing while `docker compose logs blueflow` shows `viper_webhook` *
 
 ```bash
 just demo
-just logs
 ```
 
 `just demo` brings up the full stack (including seed) and starts `tapirxl` in
 `live` mode with the `replay` tcpreplay sidecar. TapirXL listens on the shared
 netns `eth0`; `replay` loops the PCAP continuously, so BlueFlow is fed a
-steady stream of upserts. Watch `just logs` for `PUT /api/assets/upsert/ 200`
-lines confirming the pipeline is live.
+steady stream of upserts. The recipe then streams InventoryRecord JSON to the
+terminal (compact one-line objects, same fields as `just parse`). Emits are
+paced for demo visibility (~1 s initial settle, 2 s quiescence) rather than the
+image defaults (2 s / 30 s). Press Ctrl+C to stop the log tail; containers keep
+running.
+
+To confirm BlueFlow upserts in another terminal:
+
+```bash
+just logs
+```
+
+Watch for `PUT /api/assets/upsert/ 200` lines confirming the pipeline is live.
 
 ---
 

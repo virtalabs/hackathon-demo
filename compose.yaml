@@ -194,6 +194,7 @@ services:
 
   tapirxl:
     image: virtalabsinc/tapirxl:${TAPIRXL_TAG:-demo-0.3.1}
+    entrypoint: ["bash", "/demo-init/tapirxl-demo-entrypoint.sh"]
     depends_on:
       blueflow:
         condition: service_healthy
@@ -205,6 +206,11 @@ services:
       TAPIRXL_MODE: ${TAPIRXL_MODE:-pcap}
       TAPIRXL_PCAP_PATH: ${TAPIRXL_PCAP_PATH:-/pcap/synthetic_philips_demo.pcap}
       TAPIRXL_INTERFACE: ${TAPIRXL_INTERFACE:-eth0}
+      TAPIRXL_TELEMETRY: ${TAPIRXL_TELEMETRY:-0}
+      TAPIRXL_INITIAL_EMIT_SECS: ${TAPIRXL_INITIAL_EMIT_SECS:-}
+      TAPIRXL_QUIESCENCE_SECS: ${TAPIRXL_QUIESCENCE_SECS:-}
+      TAPIRXL_HEARTBEAT_SECS: ${TAPIRXL_HEARTBEAT_SECS:-}
+      PYTHONUNBUFFERED: ${PYTHONUNBUFFERED:-}
     volumes:
       - ./pcap:/pcap:ro
       - ./init:/demo-init:ro
